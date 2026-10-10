@@ -8,18 +8,39 @@ function EvidenceItem({ ev }) {
   const long = text.length > 220;
 
   return (
-    <li className="evidence-item">
-      <div className="evidence-meta">
-        <a href={pubmed(ev.pmid)} target="_blank" rel="noreferrer">PMID {ev.pmid}</a>
-        {ev.year && <span>{String(ev.year).slice(0, 4)}</span>}
-        {ev.type && <span className="chip">{String(ev.type).toLowerCase()}</span>}
+    <li className="bg-slate-855/60 border border-slate-800 rounded-lg p-3 space-y-2 text-sm text-slate-300">
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <a 
+          href={pubmed(ev.pmid)} 
+          target="_blank" 
+          rel="noreferrer"
+          className="text-sky-400 hover:text-sky-300 font-medium underline underline-offset-2"
+        >
+          PMID {ev.pmid}
+        </a>
+        {ev.year && <span className="text-slate-400 font-medium">{String(ev.year).slice(0, 4)}</span>}
+        {ev.type && (
+          <span className="bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full text-[11px] font-medium border border-slate-700/60 uppercase tracking-wider">
+            {String(ev.type).toLowerCase()}
+          </span>
+        )}
         {ev.direction && ev.direction !== "NOT_APPLICABLE" && (
-          <span className="chip">{String(ev.direction).toLowerCase()}</span>
+          <span className="bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded-full text-[11px] font-medium border border-blue-500/20 uppercase tracking-wider">
+            {String(ev.direction).toLowerCase()}
+          </span>
         )}
       </div>
-      {text && <p>{open || !long ? text : `${text.slice(0, 220)}…`}</p>}
+      {text && (
+        <p className="text-slate-300 text-xs leading-relaxed">
+          {open || !long ? text : `${text.slice(0, 220)}…`}
+        </p>
+      )}
       {long && (
-        <button type="button" className="link-btn" onClick={() => setOpen(!open)}>
+        <button 
+          type="button" 
+          className="text-xs text-sky-400 hover:text-sky-300 font-medium mt-1 focus:outline-none" 
+          onClick={() => setOpen(!open)}
+        >
           {open ? "Show less" : "Show more"}
         </button>
       )}
@@ -39,18 +60,31 @@ export default function EvidenceList({ title, edge }) {
   ].filter(Boolean);
 
   return (
-    <div className="evidence">
-      <h4>{title}</h4>
-      {summary.length > 0 && <p className="muted small">{summary.join(" · ")}</p>}
-      {raw.sources?.length > 0 && <p className="muted small">Sources: {raw.sources.join(", ")}</p>}
+    <div className="space-y-3 bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-lg text-slate-100">
+      <h4 className="font-semibold text-sm text-white tracking-wide">{title}</h4>
+      
+      {summary.length > 0 && (
+        <p className="text-slate-400 text-xs font-medium">
+          {summary.join(" · ")}
+        </p>
+      )}
+      
+      {raw.sources?.length > 0 && (
+        <p className="text-slate-400 text-xs">
+          <strong className="text-slate-300">Sources:</strong> {raw.sources.join(", ")}
+        </p>
+      )}
+
       {evidence.length > 0 ? (
-        <ul>
+        <ul className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
           {evidence.map((ev, i) => (
             <EvidenceItem key={`${ev.pmid}-${i}`} ev={ev} />
           ))}
         </ul>
       ) : (
-        <p className="muted small">No publication sentences recorded for this link.</p>
+        <p className="text-slate-500 text-xs italic">
+          No publication sentences recorded for this link.
+        </p>
       )}
     </div>
   );

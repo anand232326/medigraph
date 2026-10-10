@@ -126,24 +126,44 @@ export default function GraphExplorer({ a, b }) {
     return { a: `${name(dataset.ds.a)} only`, b: `${name(dataset.ds.b)} only`, shared: "Both diseases" };
   }, [dataset]);
 
-  if (status === "loading") return <p className="state">Loading graph…</p>;
+  if (status === "loading") {
+    return (
+      <div className="flex items-center justify-center h-screen bg-slate-950 text-slate-300">
+        <div className="flex items-center gap-3">
+          <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          <span className="text-sm font-medium">Loading graph…</span>
+        </div>
+      </div>
+    );
+  }
+
   if (status === "error") {
     return (
-      <div className="state error">
-        <p>{error}</p>
-        <Link to="/">← Back to home</Link>
+      <div className="flex flex-col items-center justify-center h-screen bg-slate-950 text-slate-300 gap-4 p-4 text-center">
+        <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl max-w-md">
+          <p className="font-medium text-sm">{error}</p>
+        </div>
+        <Link to="/" className="text-xs font-semibold text-blue-400 hover:text-blue-300 flex items-center gap-1">
+          ← Back to home
+        </Link>
       </div>
     );
   }
 
   return (
-    <div className="disease-page">
-      <div className="disease-top">
-        <Link to="/" className="back">← Home</Link>
-        <SearchBar placeholder="Search another disease" />
-      </div>
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-slate-950 text-slate-100">
+      {/* Top Bar */}
+      <header className="flex items-center justify-between px-6 py-3 border-b border-slate-800 bg-slate-900/50 backdrop-blur-md z-20">
+        <Link to="/" className="text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-1.5 transition-colors">
+          <span>←</span> Home
+        </Link>
+        <div className="w-96">
+          <SearchBar placeholder="Search another disease" />
+        </div>
+      </header>
 
-      <div className={`graph-layout ${selectedNode ? "with-details" : ""}`}>
+      {/* Main Layout Area */}
+      <div className="flex flex-1 relative overflow-hidden">
         <GraphSidebar
           dataset={dataset.ds}
           nodes={graph.nodes}
@@ -163,20 +183,15 @@ export default function GraphExplorer({ a, b }) {
         />
 
         {selectedNode && (
-          <NodeDetails
-            node={selectedNode}
-            connections={connections}
-            sideNames={sideNames}
-            isExpanded={expanded.has(selectedId)}
-            onExpand={() => expandNode(selectedId)}
-            onSelect={selectFromList}
-            onClose={clearSelection}
-            availableIds={availableIds}
-            currentRootIds={rootIds}
-            onOpenDisease={(id) => navigate(`/disease/${id}`)}
-          />
-        )}
-      </div>
-    </div>
-  );
-}
+          <div className="w-96 h-full border-l border-slate-800 bg-slate-900 z-20 shadow-2xl flex flex-col">
+            <NodeDetails
+              node={selectedNode}
+              connections={connections}
+              sideNames={sideNames}
+              isExpanded={expanded.has(selectedId)}
+              onExpand={() => expandNode(selectedId)}
+              onSelect={selectFromList}
+              onClose={clearSelection}
+              availableIds={availableIds}
+              currentRootIds={rootIds}
+              onOpenDisease={(id) => navigate(`/disease
