@@ -1,148 +1,259 @@
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import ForceGraph2D from "react-force-graph-2d";
 import {
-  DOWN_COLOR, EDGE_COLORS, NODE_COLORS, SIDE_COLORS, UP_COLOR, nodeRadius, prettify,
+  DOWN_COLOR,
+  EDGE_COLORS,
+  NODE_COLORS,
+  SIDE_COLORS,
+  UP_COLOR,
+  nodeRadius,
+  prettify,
 } from "../utils/graphConfig.js";
 
-export default function GraphView({ data, selectedId, onNodeClick, sideMode }) {
+const DEFAULT_NODE_COLOR = "#64748b";
+const BACKGROUND_COLOR = "#020617";
+const SELECTED_COLOR = "#38bdf8";
+
+export default function GraphView({
+  data,
+  selectedId,
+  onNodeClick,
+  onBackgroundClick,
+  sideMode = false,
+  graphKey,
+}) {
   const fgRef = useRef(null);
   const wrapRef = useRef(null);
   const fitted = useRef(false);
-  const [size, setSize] = useState({ width: 800, height: 680 });
 
-  // Keep the canvas the same size as its container
+  const [size, setSize] = useState({
+    width: 800,
+    height: 680,
+  });
+
+  // Track container dimensions so the canvas responds to resizing.
   useEffect(() => {
-    const el = wrapRef.current;
-    if (!el) return undefined;
+    const element = wrapRef.current;
+
+    if (!element) return undefined;
+
     const observer = new ResizeObserver(([entry]) => {
       const { width, height } = entry.contentRect;
-      setSize({ width, height });
+
+      setSize({
+        width: Math.max(1, Math.floor(width)),
+        height: Math.max(1, Math.floor(height)),
+      });
     });
-    observer.observe(el);
+
+    observer.observe(element);
+
     return () => observer.disconnect();
   }, []);
 
-  // Spread nodes out a little
+  // Reset the automatic-fit flag whenever a different dataset is selected.
   useEffect(() => {
-    const fg = fgRef.current;
-    if (!fg) return;
-    fg.d3Force("charge")?.strength(-110);
-    fg.d3Force("link")?.distance(55);
-  }, []);
+    fitted.current = false;
+  }, [graphKey]);
 
+  // Configure forces for a more spacious graph layout.
+  useEffect(() => {
+    const graph = fgRef.current;
+
+    if (!graph) return;
+
+    graph.d3Force("charge")?.strength(-180);
+    graph.d3Force("link")?.distance(70);
+    graph.d3Force("center")?.strength(0.08);
+  }, [graphKey]);
+
+  // Determine the fill color for each node.
   const colorOf = useCallback(
     (node) => {
-      if (sideMode && node.type === "Gene" && node.raw?.side) return SIDE_COLORS[node.raw.side];
-      return NODE_COLORS[node.type] || "#64748b";
+      if (
+        sideMode &&
+        node.type === "Gene" &&
+        node.raw?.side &&
+        SIDE_COLORS[node.raw.side]
+      ) {
+        return SIDE_COLORS[node.raw.side];
+      }
+
+      return NODE_COLORS[node.type] || DEFAULT_NODE_COLOR;
     },
     [sideMode]
   );
 
+  // Draw nodes, labels, expression rings, and the selection highlight.
   const paintNode = useCallback(
     (node, ctx, scale) => {
-      const r = nodeRadius(node);
+      const radius = nodeRadius(node);
+      const label = String(node.label || node.id || "Unknown");
+      const safeScale = Math.max(scale, 0.01);
+
       ctx.beginPath();
-      ctx.arc(node.x, node.y, r, 0, 2 * Math.PI);
+      ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
       ctx.fillStyle = colorOf(node);
       ctx.fill();
 
-      // red ring = up-regulated gene, blue ring = down-regulated gene
-      const dir = node.raw?.direction;
-      if (dir === "UP" || dir === "DOWN") {
-        ctx.lineWidth = 2 / scale;
-        ctx.strokeStyle = dir === "UP" ? UP_COLOR : DOWN_COLOR;
+      // Indicate up- or down-regulated genes with a colored ring.
+      const direction = node.raw?.direction;
+
+      if (direction === "UP" || direction === "DOWN") {
+        ctx.lineWidth = 2 / safeScale;
+        ctx.strokeStyle =
+          direction === "UP" ? UP_COLOR : DOWN_COLOR;
         ctx.stroke();
       }
 
+      // Highlight the selected node.
       if (node.id === selectedId) {
         ctx.beginPath();
-        ctx.arc(node.x, node.y, r + 3 / scale, 0, 2 * Math.PI);
-        ctx.lineWidth = 2 / scale;
-        ctx.strokeStyle = "#38bdf8"; // Updated to a nice sky blue highlight matching tailwind theme
+        ctx.arc(
+          node.x,
+          node.y,
+          radius + 3 / safeScale,
+          0,
+          Math.PI * 2
+        );
+        ctx.lineWidth = 2 / safeScale;
+        ctx.strokeStyle = SELECTED_COLOR;
         ctx.stroke();
       }
 
-      // labels: always for diseases, otherwise when zoomed in or selected
-      if (node.type === "Disease" || node.id === selectedId || scale >= 1.3) {
-        const bold = node.isRoot || node.type === "Disease";
-        const fontSize = (node.isRoot ? 15 : 11) / scale;
-        ctx.font = `${bold ? "600 " : ""}${fontSize}px system-ui, sans-serif`;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "top";
-        ctx.fillStyle = "#f8fafc"; // Light text for dark canvas background
-        const label = node.label.length > 26 ? `${node.label.slice(0, 25)}…` : node.label;
-        ctx.fillText(label, node.x, node.y + r + 3 / scale);
-      }
+      // Show labels for diseases, selected nodes, and zoomed-in views.
+      const showLabel =
+        node.type === "Disease" ||
+        node.id === selectedId ||
+        scale >= 1.3;
+
+      if (!showLabel) return;
+
+      const isImportant = node.isRoot || node.type === "Disease";
+      const fontSize = (isImportant ? 15 : 11) / safeScale;
+      const displayLabel =
+        label.length > 26 ? `${label.slice(0, 25)}…` : label;
+
+      ctx.font = `${isImportant ? "600 " : ""}${fontSize}px system-ui, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      ctx.fillStyle = "#f8fafc";
+
+      ctx.fillText(
+        displayLabel,
+        node.x,
+        node.y + radius + 3 / safeScale
+      );
     },
     [selectedId, colorOf]
   );
 
+  // Define the clickable area around each node.
   const paintPointerArea = useCallback((node, color, ctx) => {
-    ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.arc(node.x, node.y, nodeRadius(node) + 3, 0, 2 * Math.PI);
+    ctx.arc(
+      node.x,
+      node.y,
+      nodeRadius(node) + 4,
+      0,
+      Math.PI * 2
+    );
+    ctx.fillStyle = color;
     ctx.fill();
   }, []);
 
-  const zoomBy = (factor) => {
-    const fg = fgRef.current;
-    if (fg) fg.zoom(fg.zoom() * factor, 300);
-  };
+  // Zoom in or out relative to the current zoom level.
+  const zoomBy = useCallback((factor) => {
+    const graph = fgRef.current;
+
+    if (!graph) return;
+
+    graph.zoom(graph.zoom() * factor, 250);
+  }, []);
+
+  // Fit the current graph inside the visible canvas.
+  const fitGraph = useCallback(() => {
+    const graph = fgRef.current;
+
+    if (!graph || !data.nodes?.length) return;
+
+    graph.zoomToFit(500, 60);
+  }, [data]);
+
+  // Automatically fit once after the graph simulation settles.
+  const handleEngineStop = useCallback(() => {
+    if (fitted.current || !data.nodes?.length) return;
+
+    fitted.current = true;
+    fgRef.current?.zoomToFit(500, 60);
+  }, [data]);
 
   return (
-    <div className="relative flex-1 w-full h-full bg-slate-950 overflow-hidden flex flex-col" ref={wrapRef}>
+    <div
+      ref={wrapRef}
+      className="relative flex-1 w-full h-full min-w-0 min-h-0 bg-slate-950 overflow-hidden"
+    >
       <ForceGraph2D
+        key={graphKey ?? "default-graph"}
         ref={fgRef}
         width={size.width}
         height={size.height}
         graphData={data}
+        backgroundColor={BACKGROUND_COLOR}
         nodeCanvasObjectMode={() => "replace"}
         nodeCanvasObject={paintNode}
         nodePointerAreaPaint={paintPointerArea}
-        nodeLabel={(n) => `${n.label} (${n.type})`}
-        linkColor={(l) => EDGE_COLORS[l.type] || "#334155"}
+        nodeLabel={(node) =>
+          `${node.label || node.id || "Unknown"} (${node.type || "Unknown type"})`
+        }
+        linkColor={(link) =>
+          EDGE_COLORS[link.type] || "#334155"
+        }
         linkWidth={1.2}
-        linkLabel={(l) => prettify(l.type)}
+        linkLabel={(link) => prettify(link.type || "relationship")}
         onNodeClick={onNodeClick}
+        onBackgroundClick={onBackgroundClick}
         cooldownTicks={150}
-        onEngineStop={() => {
-          if (!fitted.current) {
-            fitted.current = true;
-            fgRef.current?.zoomToFit(500, 60);
-          }
-        }}
+        onEngineStop={handleEngineStop}
       />
 
-      {/* Floating Zoom & Fit Controls */}
-      <div className="absolute bottom-6 right-6 flex flex-col gap-1.5 bg-slate-900/80 backdrop-blur-md border border-slate-800 rounded-lg p-1.5 shadow-xl z-10">
-        <button 
-          type="button" 
-          onClick={() => zoomBy(1.4)} 
+      {/* Zoom and fit controls */}
+      <div className="absolute bottom-6 right-6 z-10 flex flex-col gap-1.5 rounded-lg border border-slate-800 bg-slate-900/90 p-1.5 shadow-xl backdrop-blur-md">
+        <button
+          type="button"
+          onClick={() => zoomBy(1.4)}
           aria-label="Zoom in"
-          className="w-8 h-8 flex items-center justify-center text-slate-200 hover:bg-slate-800 hover:text-white rounded text-base font-medium transition-colors"
+          title="Zoom in"
+          className="flex h-8 w-8 items-center justify-center rounded text-base font-medium text-slate-200 transition-colors hover:bg-slate-800 hover:text-white"
         >
           +
         </button>
-        <button 
-          type="button" 
-          onClick={() => zoomBy(1 / 1.4)} 
+
+        <button
+          type="button"
+          onClick={() => zoomBy(1 / 1.4)}
           aria-label="Zoom out"
-          className="w-8 h-8 flex items-center justify-center text-slate-200 hover:bg-slate-800 hover:text-white rounded text-base font-medium transition-colors"
+          title="Zoom out"
+          className="flex h-8 w-8 items-center justify-center rounded text-base font-medium text-slate-200 transition-colors hover:bg-slate-800 hover:text-white"
         >
           −
         </button>
-        <button 
-          type="button" 
-          onClick={() => fgRef.current?.zoomToFit(500, 60)}
-          className="px-2 py-1 flex items-center justify-center text-slate-200 hover:bg-slate-800 hover:text-white rounded text-xs font-medium transition-colors"
+
+        <button
+          type="button"
+          onClick={fitGraph}
+          title="Fit the graph to the screen"
+          className="flex items-center justify-center rounded px-2 py-1 text-xs font-medium text-slate-200 transition-colors hover:bg-slate-800 hover:text-white"
         >
           Fit
         </button>
       </div>
 
-      {/* Floating Hint Overlay */}
-      <div className="absolute bottom-6 left-6 bg-slate-900/80 backdrop-blur-md border border-slate-800 text-slate-400 text-xs px-3 py-2 rounded-lg shadow-xl pointer-events-none z-10 max-w-xs">
-        Click a node for its references and to reveal its connections. Zoom in to see all labels.
+      {/* Interaction hint */}
+      <div className="pointer-events-none absolute bottom-6 left-6 z-10 max-w-xs rounded-lg border border-slate-800 bg-slate-900/90 px-3 py-2 text-xs text-slate-400 shadow-xl backdrop-blur-md">
+        Click a node to inspect its details. Click the background to clear
+        selection. Zoom in to reveal more labels.
       </div>
     </div>
   );

@@ -1,9 +1,6 @@
 import { normalise } from "../utils/normalise.js";
 
 // All disease data lives in public/data/diseases.json.
-// To add a disease, add another entry to that file - it shows up in search and on the home page.
-// Later you can swap loadAll() for a fetch to your FastAPI backend and nothing else changes.
-
 let cache = null;
 
 function loadAll() {
@@ -27,8 +24,13 @@ const single = (all) => all.filter((d) => d.mode !== "pair");
 export async function getDiseaseList() {
   const all = await loadAll();
   return single(all)
-    .map((d) => ({ id: d.id, name: d.name, totals: d.totals || {}, regulated: d.regulated }))
-    .sort((a, b) => (b.totals.papers || 0) - (a.totals.papers || 0));
+    .map((d) => ({ 
+      id: d.id, 
+      name: d.name, 
+      totals: d.totals || {}, 
+      regulated: d.regulated 
+    }))
+    .sort((a, b) => (b.totals.papers || b.totals.Publication || 0) - (a.totals.papers || a.totals.Publication || 0));
 }
 
 export async function getTopDiseases(limit = 5) {
@@ -39,7 +41,14 @@ export async function getComparisons() {
   const all = await loadAll();
   return all
     .filter((d) => d.mode === "pair")
-    .map((d) => ({ id: d.id, name: d.name, a: d.a, b: d.b, subtitle: d.subtitle, stats: d.stats || [] }));
+    .map((d) => ({ 
+      id: d.id, 
+      name: d.name, 
+      a: d.a, 
+      b: d.b, 
+      subtitle: d.subtitle, 
+      stats: d.stats || [] 
+    }));
 }
 
 export async function getAvailableDiseaseIds() {
@@ -47,7 +56,7 @@ export async function getAvailableDiseaseIds() {
   return new Set(single(all).map((d) => d.id));
 }
 
-// Search by disease name. Diseases without data yet are returned with available:false.
+// Search by disease name.
 export async function searchDiseases(query) {
   const q = query.trim().toLowerCase();
   if (!q) return [];
@@ -56,7 +65,7 @@ export async function searchDiseases(query) {
   const found = new Map();
   single(all).forEach((d) => found.set(d.id, { id: d.id, name: d.name, available: true, totals: d.totals || {} }));
   all.forEach((d) =>
-    d.nodes.forEach((n) => {
+    d.nodes?.forEach((n) => {
       if (n.kind === "disease" && !found.has(n.id)) {
         found.set(n.id, { id: n.id, name: n.label, available: false, totals: {} });
       }
@@ -73,6 +82,8 @@ export async function getDiseaseGraph(id) {
   const all = await loadAll();
   const ds = single(all).find((d) => d.id === id);
   if (!ds) throw new Error("No data is available for this disease yet.");
+  
+  // Passes the raw dataset object directly into normalise without slicing nodes/edges
   return normalise(ds);
 }
 

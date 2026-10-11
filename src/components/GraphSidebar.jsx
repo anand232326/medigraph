@@ -1,190 +1,409 @@
 import { useMemo } from "react";
 import {
-  DOWN_COLOR, EDGE_COLORS, EDGE_HELP, NODE_COLORS, SIDE_COLORS, UP_COLOR,
+  DOWN_COLOR,
+  EDGE_COLORS,
+  EDGE_HELP,
+  NODE_COLORS,
+  SIDE_COLORS,
+  UP_COLOR,
 } from "../utils/graphConfig.js";
 
 const TOTAL_LABELS = {
   genes: "Genes",
-  high_genes: "High-confidence genes",
+  Gene: "Genes",
+  Protein: "Proteins",
+  protein: "Proteins",
+  NCBIProtein: "NCBI Proteins",
+  ncbi_protein: "NCBI Proteins",
   variants: "Variants",
-  papers: "Publications",
+  Variant: "Variants",
+  Pathway: "Pathways",
   pathways: "Pathways",
+  Drug: "Drugs",
   drugs: "Drugs",
+  Publication: "Publications",
+  papers: "Publications",
+  publications: "Publications",
+  Biomarker: "Biomarkers",
   biomarkers: "Biomarkers",
+  GEORecord: "GEO Records",
+  geo_record: "GEO Records",
+  Phenotype: "Phenotypes",
+  phenotype: "Phenotypes",
+  GOTerm: "GO Terms",
+  go_term: "GO Terms",
+  InterPro: "InterPro",
+  interpro: "InterPro",
+  Pfam: "Pfam",
+  pfam: "Pfam",
+  Anatomy: "Anatomy",
+  anatomy: "Anatomy",
+  Disease: "Diseases",
+  disease: "Diseases",
+  high_genes: "High-confidence genes",
 };
 
+const DEFAULT_NODE_COLOR = "#64748b";
+const DEFAULT_EDGE_COLOR = "#cbd5e1";
+
+const formatNumber = (value) => Number(value ?? 0).toLocaleString();
+
 export default function GraphSidebar({
-  dataset, nodes, links, hiddenTypes, onToggleType, onSetAll, sideMode,
+  dataset,
+  nodes = [],
+  links = [],
+  visibleNodes,
+  visibleLinks,
+  hiddenTypes = new Set(),
+  onToggleType,
+  onSetAll,
+  sideMode = false,
 }) {
+  const displayedNodes = visibleNodes ?? nodes;
+  const displayedLinks = visibleLinks ?? links;
+
+  // Count all node categories so filters never disappear.
   const typeCounts = useMemo(() => {
-    const map = {};
-    nodes.forEach((n) => {
-      map[n.type] = (map[n.type] || 0) + 1;
-    });
-    return map;
+    const counts = {};
+
+    for (const node of nodes) {
+      if (node.type) {
+        counts[node.type] = (counts[node.type] || 0) + 1;
+      }
+    }
+
+    return counts;
   }, [nodes]);
 
+  // Count nodes currently visible after applying category filters.
+  const visibleTypeCounts = useMemo(() => {
+    const counts = {};
+
+    for (const node of displayedNodes) {
+      if (node.type) {
+        counts[node.type] = (counts[node.type] || 0) + 1;
+      }
+    }
+
+    return counts;
+  }, [displayedNodes]);
+
+  // Count currently visible relationships.
   const relCounts = useMemo(() => {
-    const map = {};
-    links.forEach((l) => {
-      map[l.type] = (map[l.type] || 0) + 1;
-    });
-    return map;
+    const counts = {};
+
+    for (const link of displayedLinks) {
+      if (link.type) {
+        counts[link.type] = (counts[link.type] || 0) + 1;
+      }
+    }
+
+    return counts;
+  }, [displayedLinks]);
+
+  // Keep all relationship types available in the legend.
+  const relationshipTypes = useMemo(() => {
+    return [
+      ...new Set(
+        links
+          .map((link) => link.type)
+          .filter(Boolean)
+      ),
+    ].sort();
   }, [links]);
 
-  const sideCounts = useMemo(() => {
-    const map = { a: 0, b: 0, shared: 0 };
-    nodes.forEach((n) => {
-      if (n.type === "Gene" && n.raw?.side) map[n.raw.side] += 1;
-    });
-    return map;
-  }, [nodes]);
+  // Keep category ordering stable, even when categories are hidden.
+  const types = useMemo(() => {
+    return Object.keys(typeCounts).sort(
+      (a, b) =>
+        typeCounts[b] - typeCounts[a] || a.localeCompare(b)
+    );
+  }, [typeCounts]);
 
-  const types = Object.keys(typeCounts).sort((a, b) => typeCounts[b] - typeCounts[a]);
-  const rels = Object.keys(relCounts).sort((a, b) => relCounts[b] - relCounts[a]);
-  const totals = Object.entries(dataset.totals || {}).filter(([k]) => TOTAL_LABELS[k]);
-  const diseaseLabel = (id) => dataset.nodes.find((n) => n.id === id)?.label || id;
+  // Count visible gene-comparison groups.
+  const sideCounts = useMemo(() => {
+    const counts = { a: 0, b: 0, shared: 0 };
+
+    for (const node of displayedNodes) {
+      if (node.type !== "Gene") continue;
+
+      const side = node.raw?.side;
+
+      if (side && Object.hasOwn(counts, side)) {
+        counts[side] += 1;
+      }
+    }
+
+    return counts;
+  }, [displayedNodes]);
+
+  // Robust parsing of dataset totals mapping any schema key variation
+  const totals = useMemo(() => {
+    if (!dataset?.totals) return [];
+    return Object.entries(dataset.totals)
+      .map(([key, value]) => {
+        const label = TOTAL_LABELS[key] || TOTAL_LABELS[key.toLowerCase()] || key;
+        return [label, value];
+      })
+      .filter(([_, value]) => value !== undefined && value !== null);
+  }, [dataset]);
+
+  const comparisonGroups = [
+    {
+      key: "a",
+      label: "Group A only",
+      color: SIDE_COLORS.a,
+    },
+    {
+      key: "b",
+      label: "Group B only",
+      color: SIDE_COLORS.b,
+    },
+    {
+      key: "shared",
+      label: "Shared by both",
+      color: SIDE_COLORS.shared,
+    },
+  ];
 
   return (
-    <aside className="w-80 bg-slate-900 text-slate-100 p-4 overflow-y-auto h-screen flex flex-col gap-4 border-r border-slate-800 text-sm">
-      <div>
-        <h2 className="text-lg font-bold text-white">{dataset.name}</h2>
-        {dataset.subtitle && <p className="text-slate-400 text-xs mt-1">{dataset.subtitle}</p>}
-      </div>
+    <aside className="flex h-screen w-80 shrink-0 flex-col gap-4 overflow-y-auto border-r border-slate-800 bg-slate-900 p-4 text-sm text-slate-100">
+      {/* Dataset header */}
+      <header>
+        <h2 className="text-lg font-bold text-white">
+          {dataset?.name}
+        </h2>
 
-      <div className="grid grid-cols-2 gap-2 bg-slate-800/50 p-3 rounded-lg border border-slate-800">
-        <div className="flex flex-col"><span className="text-slate-400 text-xs">Nodes shown</span><strong className="text-base text-white">{nodes.length}</strong></div>
-        <div className="flex flex-col"><span className="text-slate-400 text-xs">Edges shown</span><strong className="text-base text-white">{links.length}</strong></div>
-        <div className="flex flex-col"><span className="text-slate-400 text-xs">Node types</span><strong className="text-base text-white">{types.length}</strong></div>
-        <div className="flex flex-col"><span className="text-slate-400 text-xs">Relationships</span><strong className="text-base text-white">{rels.length}</strong></div>
-      </div>
+        {dataset?.subtitle && (
+          <p className="mt-1 text-xs text-slate-400">
+            {dataset.subtitle}
+          </p>
+        )}
+      </header>
 
-      {dataset.isPair && dataset.stats && (
-        <div className="space-y-1">
-          <h3 className="font-semibold text-xs uppercase tracking-wider text-slate-400">Comparison</h3>
-          <dl className="bg-slate-800/40 rounded-lg p-2 space-y-1 border border-slate-800">
+      {/* Graph statistics */}
+      <section
+        aria-label="Graph statistics"
+        className="grid grid-cols-2 gap-3 rounded-lg border border-slate-800 bg-slate-800/50 p-3"
+      >
+        <Stat
+          label="Visible nodes"
+          value={displayedNodes.length}
+          detail={`of ${formatNumber(nodes.length)} total`}
+        />
+
+        <Stat
+          label="Visible edges"
+          value={displayedLinks.length}
+          detail={`of ${formatNumber(links.length)} total`}
+        />
+
+        <Stat label="Node types" value={types.length} />
+
+        <Stat
+          label="Relationship types"
+          value={relationshipTypes.length}
+        />
+      </section>
+
+      {/* Disease comparison */}
+      {dataset?.isPair && dataset?.stats && (
+        <section className="space-y-2">
+          <SectionTitle>Comparison</SectionTitle>
+
+          <dl className="space-y-1 rounded-lg border border-slate-800 bg-slate-800/40 p-2">
             {dataset.stats.map(([label, value]) => (
-              <div key={label} className="flex justify-between py-1 border-b border-slate-800/60 last:border-none">
+              <div
+                key={label}
+                className="flex justify-between gap-3 border-b border-slate-800/60 py-1 last:border-none"
+              >
                 <dt className="text-slate-400">{label}</dt>
-                <dd className="font-medium text-slate-200">{value}</dd>
+                <dd className="font-medium text-slate-200">
+                  {value}
+                </dd>
               </div>
             ))}
           </dl>
-        </div>
+        </section>
       )}
 
+      {/* Database totals from dataset config */}
       {totals.length > 0 && (
-        <div className="space-y-2">
-          <h3 className="font-semibold text-xs uppercase tracking-wider text-slate-400">In the database</h3>
-          <dl className="bg-slate-800/40 rounded-lg p-2 space-y-1 border border-slate-800">
-            {totals.map(([key, value]) => (
-              <div key={key} className="flex justify-between py-1 border-b border-slate-800/60 last:border-none">
-                <dt className="text-slate-400">{TOTAL_LABELS[key]}</dt>
-                <dd className="font-medium text-slate-200">{Number(value).toLocaleString()}</dd>
+        <section className="space-y-2">
+          <SectionTitle>In the database</SectionTitle>
+
+          <dl className="space-y-1 rounded-lg border border-slate-800 bg-slate-800/40 p-2">
+            {totals.map(([label, value]) => (
+              <div
+                key={label}
+                className="flex justify-between gap-3 border-b border-slate-800/60 py-1 last:border-none"
+              >
+                <dt className="text-slate-400">
+                  {label}
+                </dt>
+                <dd className="font-medium text-slate-200">
+                  {formatNumber(value)}
+                </dd>
               </div>
             ))}
           </dl>
-          <p className="text-slate-400 text-xs italic">The graph shows the strongest connections only.</p>
-        </div>
+        </section>
       )}
 
+      {/* Comparison gene colors */}
       {sideMode && (
-        <div className="space-y-2">
-          <h3 className="font-semibold text-xs uppercase tracking-wider text-slate-400">Gene colours</h3>
-          <ul className="space-y-1.5">
-            <li className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full inline-block" style={{ background: SIDE_COLORS.a }} />
-                <span className="text-slate-300">{diseaseLabel(dataset.a)} only</span>
-              </div>
-              <span className="text-slate-400 text-xs">{sideCounts.a}</span>
-            </li>
-            <li className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full inline-block" style={{ background: SIDE_COLORS.b }} />
-                <span className="text-slate-300">{diseaseLabel(dataset.b)} only</span>
-              </div>
-              <span className="text-slate-400 text-xs">{sideCounts.b}</span>
-            </li>
-            <li className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full inline-block" style={{ background: SIDE_COLORS.shared }} />
-                <span className="text-slate-300">Shared by both</span>
-              </div>
-              <span className="text-slate-400 text-xs">{sideCounts.shared}</span>
-            </li>
+        <section className="space-y-2">
+          <SectionTitle>Gene colours</SectionTitle>
+
+          <ul className="space-y-2">
+            {comparisonGroups.map((group) => (
+              <li
+                key={group.key}
+                className="flex items-center justify-between gap-2"
+              >
+                <div className="flex min-w-0 items-center gap-2">
+                  <span
+                    className="h-3 w-3 shrink-0 rounded-full"
+                    style={{ backgroundColor: group.color }}
+                  />
+                  <span className="text-slate-300">
+                    {group.label}
+                  </span>
+                </div>
+
+                <span className="text-xs text-slate-400">
+                  {formatNumber(sideCounts[group.key])}
+                </span>
+              </li>
+            ))}
           </ul>
-        </div>
+        </section>
       )}
 
-      {dataset.regulated && (
-        <div className="space-y-2">
-          <h3 className="font-semibold text-xs uppercase tracking-wider text-slate-400">Gene expression</h3>
-          <ul className="space-y-1.5">
-            <li className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full border-2 inline-block bg-transparent" style={{ borderColor: UP_COLOR }} />
-                <span className="text-slate-300">Up-regulated (red ring)</span>
-              </div>
-              <span className="text-slate-400 text-xs">{dataset.regulated.up}</span>
-            </li>
-            <li className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full border-2 inline-block bg-transparent" style={{ borderColor: DOWN_COLOR }} />
-                <span className="text-slate-300">Down-regulated (blue ring)</span>
-              </div>
-              <span className="text-slate-400 text-xs">{dataset.regulated.down}</span>
-            </li>
-          </ul>
-        </div>
-      )}
+      {/* Entity visibility filters */}
+      <section className="space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <SectionTitle>Show on the graph</SectionTitle>
 
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <h3 className="font-semibold text-xs uppercase tracking-wider text-slate-400">Show on the graph</h3>
-          <div className="flex gap-2 text-xs">
-            <button type="button" onClick={() => onSetAll(false, types)} className="text-blue-400 hover:underline">Show all</button>
-            <span className="text-slate-600">/</span>
-            <button type="button" onClick={() => onSetAll(true, types)} className="text-blue-400 hover:underline">Hide all</button>
+          <div className="flex shrink-0 gap-2">
+            <button
+              type="button"
+              onClick={() => onSetAll?.(false, types)}
+              className="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-200 transition-colors hover:border-blue-500 hover:bg-slate-800"
+            >
+              Show all
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onSetAll?.(true, types)}
+              className="rounded-full border border-slate-700 px-3 py-1.5 text-xs text-slate-200 transition-colors hover:border-blue-500 hover:bg-slate-800"
+            >
+              Hide all
+            </button>
           </div>
         </div>
-        <ul className="space-y-1.5">
-          {types.map((t) => (
-            <li key={t}>
-              <label className="flex items-center justify-between cursor-pointer group">
-                <div className="flex items-center gap-2">
-                  <input 
-                    type="checkbox" 
-                    checked={!hiddenTypes.has(t)} 
-                    onChange={() => onToggleType(t)} 
-                    className="rounded border-slate-700 bg-slate-800 text-blue-600 focus:ring-blue-500 focus:ring-offset-slate-900"
-                  />
-                  <span className="w-3 h-3 rounded-full inline-block" style={{ background: NODE_COLORS[t] || "#64748b" }} />
-                  <span className="text-slate-300 group-hover:text-white transition-colors">{t}</span>
-                </div>
-                <span className="text-slate-400 text-xs">{typeCounts[t]}</span>
-              </label>
-            </li>
-          ))}
-        </ul>
-      </div>
 
-      <div className="space-y-2 pt-2 border-t border-slate-800">
-        <h3 className="font-semibold text-xs uppercase tracking-wider text-slate-400">Relationships</h3>
-        <ul className="space-y-1.5">
-          {rels.map((r) => (
-            <li key={r} title={EDGE_HELP[r]} className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="w-4 h-1 inline-block rounded" style={{ background: EDGE_COLORS[r] || "#cbd5e1" }} />
-                <span className="text-slate-300 capitalize text-xs">
-                  {r.replace(/_/g, " ").toLowerCase()}
+        <ul className="space-y-2">
+          {types.map((type) => {
+            const checked = !hiddenTypes.has(type);
+            const visibleCount = visibleTypeCounts[type] || 0;
+            const totalCount = typeCounts[type];
+
+            return (
+              <li key={type}>
+                <label className="group flex cursor-pointer items-center justify-between gap-2">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => onToggleType?.(type)}
+                      className="h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-800 text-blue-600 focus:ring-blue-500 focus:ring-offset-slate-900"
+                    />
+
+                    <span
+                      aria-hidden="true"
+                      className="h-3 w-3 shrink-0 rounded-full"
+                      style={{
+                        backgroundColor:
+                          NODE_COLORS[type] || DEFAULT_NODE_COLOR,
+                      }}
+                    />
+
+                    <span className="truncate text-slate-300 transition-colors group-hover:text-white">
+                      {type}
+                    </span>
+                  </span>
+
+                  <span className="shrink-0 text-xs tabular-nums text-slate-400">
+                    {formatNumber(visibleCount)} / {formatNumber(totalCount)}
+                  </span>
+                </label>
+              </li>
+            );
+          })}
+        </ul>
+
+        <p className="text-xs text-slate-500">
+          Counts show visible nodes / total nodes.
+        </p>
+      </section>
+
+      {/* Relationship legend */}
+      <section className="space-y-2 border-t border-slate-800 pt-3">
+        <SectionTitle>Relationships</SectionTitle>
+
+        <ul className="space-y-2">
+          {relationshipTypes.map((type) => (
+            <li
+              key={type}
+              title={EDGE_HELP[type] || type}
+              className="flex items-center justify-between gap-2"
+            >
+              <span className="flex min-w-0 items-center gap-2">
+                <span
+                  aria-hidden="true"
+                  className="h-1 w-4 shrink-0 rounded"
+                  style={{
+                    backgroundColor:
+                      EDGE_COLORS[type] || DEFAULT_EDGE_COLOR,
+                  }}
+                />
+
+                <span className="truncate text-xs capitalize text-slate-300">
+                  {type.replace(/_/g, " ").toLowerCase()}
                 </span>
-              </div>
-              <span className="text-slate-400 text-xs">{relCounts[r]}</span>
+              </span>
+
+              <span className="shrink-0 text-xs tabular-nums text-slate-400">
+                {formatNumber(relCounts[type] || 0)}
+              </span>
             </li>
           ))}
         </ul>
-      </div>
+      </section>
     </aside>
+  );
+}
+
+function SectionTitle({ children }) {
+  return (
+    <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+      {children}
+    </h3>
+  );
+}
+
+function Stat({ label, value, detail }) {
+  return (
+    <div className="flex min-w-0 flex-col border-l-2 border-slate-700 pl-3">
+      <span className="text-xs text-slate-400">{label}</span>
+      <strong className="text-lg font-bold tabular-nums text-white">
+        {formatNumber(value)}
+      </strong>
+      {detail && (
+        <span className="text-xs text-slate-500">{detail}</span>
+      )}
+    </div>
   );
 }
