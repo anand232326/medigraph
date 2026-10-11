@@ -8,43 +8,28 @@ import {
   UP_COLOR,
 } from "../utils/graphConfig.js";
 
-const TOTAL_LABELS = {
-  genes: "Genes",
-  Gene: "Genes",
-  Protein: "Proteins",
-  protein: "Proteins",
-  NCBIProtein: "NCBI Proteins",
-  ncbi_protein: "NCBI Proteins",
-  variants: "Variants",
-  Variant: "Variants",
-  Pathway: "Pathways",
-  pathways: "Pathways",
-  Drug: "Drugs",
-  drugs: "Drugs",
-  Publication: "Publications",
-  papers: "Publications",
-  publications: "Publications",
-  Biomarker: "Biomarkers",
-  biomarkers: "Biomarkers",
-  GEORecord: "GEO Records",
-  geo_record: "GEO Records",
-  Phenotype: "Phenotypes",
-  phenotype: "Phenotypes",
-  GOTerm: "GO Terms",
-  go_term: "GO Terms",
-  InterPro: "InterPro",
-  interpro: "InterPro",
-  Pfam: "Pfam",
-  pfam: "Pfam",
-  Anatomy: "Anatomy",
-  anatomy: "Anatomy",
-  Disease: "Diseases",
-  disease: "Diseases",
-  high_genes: "High-confidence genes",
+const TYPE_STATS_KEYS = {
+  Gene: "n_gene",
+  Protein: "n_protein",
+  "NCBI Protein": "n_ncbiprotein",
+  Variant: "n_variant",
+  Pathway: "n_pathway",
+  Drug: "n_drug",
+  Publication: "n_publication",
+  Biomarker: "n_biomarker",
+  "GEO Record": "n_georecord",
+  Phenotype: "n_phenotype",
+  "GO Term": "n_goterm",
+  InterPro: "n_interpro",
+  Pfam: "n_pfam",
+  Anatomy: "n_anatomy",
 };
 
 const DEFAULT_NODE_COLOR = "#64748b";
 const DEFAULT_EDGE_COLOR = "#cbd5e1";
+const SIDEBAR_NODE_TYPES = Object.keys(NODE_COLORS).filter(
+  (type) => type !== "Drug target"
+);
 
 const formatNumber = (value) => Number(value ?? 0).toLocaleString();
 
@@ -68,25 +53,27 @@ export default function GraphSidebar({
 
     for (const node of nodes) {
       if (node.type) {
-        counts[node.type] = (counts[node.type] || 0) + 1;
+        const type = node.type === "Drug target" ? "Drug" : node.type;
+        counts[type] = (counts[type] || 0) + 1;
       }
     }
 
+    const focusStats = nodes.find((node) => node.raw?.focus)?.raw?.stats;
+    if (focusStats) {
+      for (const [type, key] of Object.entries(TYPE_STATS_KEYS)) {
+        if (Number.isFinite(focusStats[key])) {
+          counts[type] = focusStats[key];
+        }
+      }
+    }
+
+    for (const type of SIDEBAR_NODE_TYPES) {
+      if (!(type in counts)) counts[type] = 0;
+    }
+
+    delete counts["Drug target"];
     return counts;
   }, [nodes]);
-
-  // Count nodes currently visible after applying category filters.
-  const visibleTypeCounts = useMemo(() => {
-    const counts = {};
-
-    for (const node of displayedNodes) {
-      if (node.type) {
-        counts[node.type] = (counts[node.type] || 0) + 1;
-      }
-    }
-
-    return counts;
-  }, [displayedNodes]);
 
   // Count currently visible relationships.
   const relCounts = useMemo(() => {
@@ -114,7 +101,7 @@ export default function GraphSidebar({
 
   // Keep category ordering stable, even when categories are hidden.
   const types = useMemo(() => {
-    return Object.keys(typeCounts).sort(
+    return [...SIDEBAR_NODE_TYPES].sort(
       (a, b) =>
         typeCounts[b] - typeCounts[a] || a.localeCompare(b)
     );
@@ -137,17 +124,6 @@ export default function GraphSidebar({
     return counts;
   }, [displayedNodes]);
 
-  // Robust parsing of dataset totals mapping any schema key variation
-  const totals = useMemo(() => {
-    if (!dataset?.totals) return [];
-    return Object.entries(dataset.totals)
-      .map(([key, value]) => {
-        const label = TOTAL_LABELS[key] || TOTAL_LABELS[key.toLowerCase()] || key;
-        return [label, value];
-      })
-      .filter(([_, value]) => value !== undefined && value !== null);
-  }, [dataset]);
-
   const comparisonGroups = [
     {
       key: "a",
@@ -167,7 +143,7 @@ export default function GraphSidebar({
   ];
 
   return (
-    <aside className="flex h-screen w-80 shrink-0 flex-col gap-4 overflow-y-auto border-r border-slate-800 bg-slate-900 p-4 text-sm text-slate-100">
+    <aside className="flex h-full max-h-full w-80 shrink-0 flex-col gap-4 overflow-y-auto border-r border-slate-800 bg-slate-900 p-4 text-sm text-slate-100 max-md:h-auto max-md:max-h-[42vh] max-md:w-full max-md:border-r-0 max-md:border-b">
       {/* Dataset header */}
       <header>
         <h2 className="text-lg font-bold text-white">
@@ -220,29 +196,6 @@ export default function GraphSidebar({
                 <dt className="text-slate-400">{label}</dt>
                 <dd className="font-medium text-slate-200">
                   {value}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        </section>
-      )}
-
-      {/* Database totals from dataset config */}
-      {totals.length > 0 && (
-        <section className="space-y-2">
-          <SectionTitle>In the database</SectionTitle>
-
-          <dl className="space-y-1 rounded-lg border border-slate-800 bg-slate-800/40 p-2">
-            {totals.map(([label, value]) => (
-              <div
-                key={label}
-                className="flex justify-between gap-3 border-b border-slate-800/60 py-1 last:border-none"
-              >
-                <dt className="text-slate-400">
-                  {label}
-                </dt>
-                <dd className="font-medium text-slate-200">
-                  {formatNumber(value)}
                 </dd>
               </div>
             ))}
@@ -307,7 +260,6 @@ export default function GraphSidebar({
         <ul className="space-y-2">
           {types.map((type) => {
             const checked = !hiddenTypes.has(type);
-            const visibleCount = visibleTypeCounts[type] || 0;
             const totalCount = typeCounts[type];
 
             return (
@@ -336,7 +288,7 @@ export default function GraphSidebar({
                   </span>
 
                   <span className="shrink-0 text-xs tabular-nums text-slate-400">
-                    {formatNumber(visibleCount)} / {formatNumber(totalCount)}
+                    {formatNumber(totalCount)}
                   </span>
                 </label>
               </li>
@@ -345,7 +297,7 @@ export default function GraphSidebar({
         </ul>
 
         <p className="text-xs text-slate-500">
-          Counts show visible nodes / total nodes.
+          Select a node type to show or hide it on the graph.
         </p>
       </section>
 

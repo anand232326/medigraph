@@ -10,29 +10,29 @@ const CHIPS = [
 
 export default function DiseaseCard({ disease, rank }) {
   return (
-    <Link 
+    <Link
       to={`/disease/${disease.id}`} 
-      className="group relative bg-slate-900 border border-slate-800 rounded-xl p-5 hover:border-slate-700 hover:bg-slate-850 transition-all duration-200 flex flex-col justify-between shadow-lg hover:shadow-sky-500/5"
+      className="group relative flex flex-col justify-between rounded-xl border border-white bg-white/90 p-5 shadow-md shadow-blue-900/5 ring-1 ring-slate-200 transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-lg"
     >
       <div>
         <div className="flex items-center justify-between mb-3">
-          <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-slate-800 text-slate-400 text-xs font-semibold group-hover:bg-blue-600/20 group-hover:text-blue-400 transition-colors">
+          <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-blue-100 text-xs font-semibold text-blue-800 transition-colors group-hover:bg-blue-700 group-hover:text-white">
             #{rank}
           </span>
-          <span className="text-xs text-blue-400 font-medium opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+          <span className="flex items-center gap-1 text-xs font-medium text-blue-700 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
             Explore graph <span className="transform group-hover:translate-x-0.5 transition-transform">→</span>
           </span>
         </div>
 
-        <h3 className="text-base font-semibold text-slate-100 group-hover:text-white mb-4 line-clamp-2">
+        <h3 className="mb-4 line-clamp-2 text-base font-semibold text-slate-900">
           {disease.name}
         </h3>
 
         <dl className="grid grid-cols-2 gap-2 mb-2">
           {CHIPS.filter(([key]) => disease.totals[key] != null).map(([key, label]) => (
-            <div key={key} className="bg-slate-800/40 rounded-lg p-2 border border-slate-800/60">
-              <dt className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">{label}</dt>
-              <dd className="text-sm font-semibold text-slate-200 mt-0.5">
+            <div key={key} className="rounded-lg border border-blue-100 bg-gradient-to-br from-blue-50 to-indigo-50 p-2">
+              <dt className="text-[11px] font-medium uppercase tracking-wider text-slate-500">{label}</dt>
+              <dd className="mt-0.5 text-sm font-semibold text-slate-800">
                 {Number(disease.totals[key]).toLocaleString()}
               </dd>
             </div>
@@ -40,9 +40,9 @@ export default function DiseaseCard({ disease, rank }) {
         </dl>
       </div>
 
-      <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
+      <div className="flex items-center justify-between border-t border-slate-200 pt-3 text-xs text-slate-500">
         <span>View network details</span>
-        <span className="text-slate-500 group-hover:text-slate-300 transition-colors">Interactive &rarr;</span>
+        <span className="text-blue-600 transition-colors group-hover:text-indigo-700">Interactive &rarr;</span>
       </div>
     </Link>
   );

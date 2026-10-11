@@ -17,6 +17,7 @@ import {
   buildIndex,
   buildInitialGraph,
   idOf,
+  mergeGraph,
 } from "../utils/graphUtils.js";
 
 export default function GraphExplorer({ a, b }) {
@@ -98,8 +99,10 @@ export default function GraphExplorer({ a, b }) {
     setSelectedId(null);
   }, []);
 
-  // Toggle an individual node category.
+  // Toggle visibility for every node in a category.
   const toggleType = useCallback((type) => {
+    const isHidden = hiddenTypes.has(type);
+
     setHiddenTypes((previous) => {
       const next = new Set(previous);
 
@@ -111,17 +114,42 @@ export default function GraphExplorer({ a, b }) {
 
       return next;
     });
-  }, []);
 
-  // Show or hide all node categories.
+    if (isHidden) {
+      const nodes = dataset.ds.nodes.filter(
+        (node) =>
+          node.type === type ||
+          (type === "Drug" && node.type === "Drug target")
+      );
+      setGraph((previous) => mergeGraph(previous, nodes, dataset.ds.edges, null));
+    } else {
+      setSelectedId((currentId) => {
+        const selected = dataset.index.nodeById.get(currentId);
+        return selected?.type === type ? null : currentId;
+      });
+    }
+  }, [dataset, hiddenTypes]);
+
+  // Show or hide every node category.
   const setAllTypes = useCallback((hide, types) => {
     setHiddenTypes(hide ? new Set(types) : new Set());
-  }, []);
+
+    if (!hide) {
+      setGraph((previous) =>
+        mergeGraph(previous, dataset.ds.nodes, dataset.ds.edges, null)
+      );
+    } else {
+      setSelectedId(null);
+    }
+  }, [dataset]);
 
   // Derive the visible graph without modifying the complete graph.
   const visible = useMemo(() => {
     const nodes = graph.nodes.filter(
-      (node) => !hiddenTypes.has(node.type)
+      (node) =>
+        !hiddenTypes.has(
+          node.type === "Drug target" ? "Drug" : node.type
+        )
     );
 
     const visibleNodeIds = new Set(
@@ -185,7 +213,7 @@ export default function GraphExplorer({ a, b }) {
   // Loading state.
   if (status === "loading") {
     return (
-      <div className="flex h-screen items-center justify-center bg-slate-950 text-slate-300">
+      <div className="flex min-h-[60vh] items-center justify-center bg-slate-950 text-slate-300">
         <div className="flex items-center gap-3">
           <div className="h-5 w-5 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
           <span className="text-sm font-medium">
@@ -199,7 +227,7 @@ export default function GraphExplorer({ a, b }) {
   // Error state.
   if (status === "error") {
     return (
-      <div className="flex h-screen flex-col items-center justify-center gap-4 bg-slate-950 p-4 text-center text-slate-300">
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 bg-slate-950 p-4 text-center text-slate-300">
         <div className="max-w-md rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-red-400">
           <p className="text-sm font-medium">{error}</p>
         </div>
@@ -215,9 +243,9 @@ export default function GraphExplorer({ a, b }) {
   }
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-slate-950 text-slate-100">
+    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-slate-950 text-slate-100">
       {/* Top navigation */}
-      <header className="z-20 flex items-center justify-between border-b border-slate-800 bg-slate-900/50 px-6 py-3 backdrop-blur-md">
+      <header className="z-20 flex flex-col gap-3 border-b border-slate-800 bg-slate-900/50 px-4 py-3 backdrop-blur-md sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <Link
           to="/"
           className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 transition-colors hover:text-white"
@@ -226,17 +254,19 @@ export default function GraphExplorer({ a, b }) {
           Home
         </Link>
 
-        <div className="w-96">
+        <div className="w-full sm:w-96">
           <SearchBar placeholder="Search another disease" />
         </div>
       </header>
 
       {/* Main graph workspace */}
-      <div className="relative flex flex-1 overflow-hidden">
+      <div className="relative flex min-h-0 flex-1 overflow-hidden max-md:flex-col max-md:overflow-y-auto">
         <GraphSidebar
           dataset={dataset.ds}
           nodes={dataset.ds.nodes}
           links={dataset.ds.edges}
+          visibleNodes={visible.nodes}
+          visibleLinks={visible.links}
           hiddenTypes={hiddenTypes}
           onToggleType={toggleType}
           onSetAll={setAllTypes}
@@ -244,6 +274,7 @@ export default function GraphExplorer({ a, b }) {
         />
 
         <GraphView
+          className="max-md:min-h-[55vh]"
           data={visible}
           selectedId={selectedId}
           onNodeClick={handleNodeClick}
@@ -253,7 +284,7 @@ export default function GraphExplorer({ a, b }) {
 
         {/* Selected-node details */}
         {selectedNode && (
-          <div className="z-20 flex h-full w-96 flex-col border-l border-slate-800 bg-slate-900 shadow-2xl">
+          <div className="z-20 flex h-full w-96 shrink-0 flex-col border-l border-slate-800 bg-slate-900 shadow-2xl max-md:h-[45vh] max-md:w-full max-md:border-l-0 max-md:border-t">
             <NodeDetails
               node={selectedNode}
               connections={connections}

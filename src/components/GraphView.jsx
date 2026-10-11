@@ -22,6 +22,7 @@ export default function GraphView({
   onBackgroundClick,
   sideMode = false,
   graphKey,
+  className = "",
 }) {
   const fgRef = useRef(null);
   const wrapRef = useRef(null);
@@ -192,7 +193,7 @@ export default function GraphView({
   return (
     <div
       ref={wrapRef}
-      className="relative flex-1 w-full h-full min-w-0 min-h-0 bg-slate-950 overflow-hidden"
+      className={`relative flex-1 w-full h-full min-h-0 min-w-0 bg-slate-950 overflow-hidden ${className}`}
     >
       <ForceGraph2D
         key={graphKey ?? "default-graph"}
