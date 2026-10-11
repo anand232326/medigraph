@@ -53,6 +53,26 @@ The disease dataset is a JSON array. Each entry is either:
 - a single disease object with `id`, `name`, `nodes`, `edges`, `regulated`, `totals`, and optionally `subtitle`
 - a comparison object with `mode: "pair"`, `a`, `b`, `stats`, and `subtitle`
 
+Every record needs a unique `id`, a `name`, and `nodes` and `edges` arrays. Each node needs a unique `id`, `kind`, and `label`; each edge needs `source`, `target`, and `kind`, and both endpoints must exist in that record's `nodes`. Mark the disease node with `"focus": true` (two focused disease nodes for a comparison). For comparisons, `a` and `b` must reference those disease nodes.
+
+For example, add another disease as a new object in the JSON array:
+
+```json
+{
+  "id": "DIS:example",
+  "name": "Example condition",
+  "nodes": [
+    { "id": "DIS:example", "kind": "disease", "label": "Example condition", "focus": true },
+    { "id": "GENE:EXAMPLE1", "kind": "gene", "label": "EXAMPLE1", "description": "Example gene" },
+    { "id": "DATA:EXAMPLE1", "kind": "imaging_dataset", "label": "Example dataset", "sample_count": 12 }
+  ],
+  "edges": [
+    { "source": "DIS:example", "target": "GENE:EXAMPLE1", "kind": "associated" },
+    { "source": "DIS:example", "target": "DATA:EXAMPLE1", "kind": "has_data" }
+  ]
+}
+```
+
 Each node has fields such as:
 
 - `id`
@@ -66,6 +86,8 @@ Each node has fields such as:
 - `stats` for disease nodes
 
 Each edge contains the source and target IDs and a relationship type such as `ASSOCIATED`, `PATHWAY_OF`, `DRUG_FOR`, `TARGETS`, or `SHARES_GENES`.
+
+Node kinds are not limited to the examples above: new kinds are automatically normalized, listed as graph filters, and shown with their additional JSON fields when selected. Known kinds keep their specialized details and colors; unknown kinds use a default color. `totals` is optional for single-disease records: missing gene, variant, publication, pathway, drug, and biomarker totals are counted from `nodes`. Explicit values in `totals` are kept, which lets you provide full-dataset counts when the graph only contains a subset of records. The app validates the data file when it loads and reports which record, node, or edge needs correction.
 
 ## File-by-file overview
 

@@ -9,13 +9,38 @@ const STAT_LABELS = {
 
 const yesNo = (v) => (v === true ? "Yes" : v === false ? "No" : null);
 const join = (arr) => (Array.isArray(arr) && arr.length ? arr.join(", ") : null);
+const STRUCTURAL_FIELDS = new Set(["id", "kind", "label", "focus"]);
+const DISPLAYED_FIELDS = {
+  gene: ["description", "location", "confidence", "direction", "papers", "variants", "pathogenic", "sources", "side", "pmids"],
+  pathway: ["source", "category", "genes_total", "kg_genes", "fdr", "url"],
+  drug: ["drug_type", "stage", "approved", "actions", "mechanism"],
+  target: ["description", "linked_to_disease"],
+  disease: ["stats"],
+};
+
+function displayValue(value) {
+  if (Array.isArray(value)) {
+    return value.every((item) => item == null || ["string", "number", "boolean"].includes(typeof item))
+      ? value.join(", ")
+      : JSON.stringify(value);
+  }
+  if (value && typeof value === "object") return JSON.stringify(value);
+  if (typeof value === "boolean") return yesNo(value);
+  return value;
+}
+
+function fieldLabel(key) {
+  return prettify(key.replace(/([a-z])([A-Z])/g, "$1 $2"))
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
 
 // [label, value] rows for the clicked node, depending on what kind of node it is
 function factsFor(node, sideNames) {
   const r = node.raw;
+  let facts;
   switch (node.kind) {
     case "gene":
-      return [
+      facts = [
         ["Description", r.description],
         ["Location", r.location],
         ["Confidence", r.confidence],
@@ -26,32 +51,55 @@ function factsFor(node, sideNames) {
         ["Sources", join(r.sources)],
         ["Found in", r.side ? sideNames[r.side] : null],
       ];
+      break;
     case "pathway":
-      return [
+      facts = [
         ["Source", r.source],
         ["Category", r.category],
         ["Genes in pathway", r.genes_total],
         ["Genes in this graph", r.kg_genes],
         ["FDR", r.fdr != null ? Number(r.fdr).toExponential(2) : null],
       ];
+      break;
     case "drug":
-      return [
+      facts = [
         ["Type", r.drug_type],
         ["Stage", r.stage ? prettify(r.stage) : null],
         ["Approved", yesNo(r.approved)],
         ["Action", join(r.actions)],
         ["Mechanism", join(r.mechanism)],
       ];
+      break;
     case "target":
-      return [
+      facts = [
         ["Description", r.description],
         ["Linked to the disease", yesNo(r.linked_to_disease)],
       ];
+      break;
     case "disease":
-      return Object.entries(r.stats || {}).map(([k, v]) => [STAT_LABELS[k] || prettify(k), v]);
+      facts = Object.entries(r.stats || {}).map(([k, v]) => [
+        STAT_LABELS[k] || fieldLabel(k.replace(/^n_/, "")),
+        v,
+      ]);
+      break;
     default:
-      return [];
+      facts = [];
   }
+
+  const displayedFields = new Set([
+    ...STRUCTURAL_FIELDS,
+    ...(DISPLAYED_FIELDS[node.kind] || []),
+  ]);
+  const additionalFacts = Object.entries(r)
+    .filter(([key, value]) =>
+      !displayedFields.has(key) &&
+      value !== null &&
+      value !== undefined &&
+      value !== ""
+    )
+    .map(([key, value]) => [fieldLabel(key), displayValue(value)]);
+
+  return [...facts, ...additionalFacts];
 }
 
 // External reference pages for the node

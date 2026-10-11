@@ -8,23 +8,6 @@ import {
   UP_COLOR,
 } from "../utils/graphConfig.js";
 
-const TYPE_STATS_KEYS = {
-  Gene: "n_gene",
-  Protein: "n_protein",
-  "NCBI Protein": "n_ncbiprotein",
-  Variant: "n_variant",
-  Pathway: "n_pathway",
-  Drug: "n_drug",
-  Publication: "n_publication",
-  Biomarker: "n_biomarker",
-  "GEO Record": "n_georecord",
-  Phenotype: "n_phenotype",
-  "GO Term": "n_goterm",
-  InterPro: "n_interpro",
-  Pfam: "n_pfam",
-  Anatomy: "n_anatomy",
-};
-
 const DEFAULT_NODE_COLOR = "#64748b";
 const DEFAULT_EDGE_COLOR = "#cbd5e1";
 const SIDEBAR_NODE_TYPES = Object.keys(NODE_COLORS).filter(
@@ -60,9 +43,17 @@ export default function GraphSidebar({
 
     const focusStats = nodes.find((node) => node.raw?.focus)?.raw?.stats;
     if (focusStats) {
-      for (const [type, key] of Object.entries(TYPE_STATS_KEYS)) {
-        if (Number.isFinite(focusStats[key])) {
-          counts[type] = focusStats[key];
+      for (const [key, value] of Object.entries(focusStats)) {
+        const statType = key.startsWith("n_")
+          ? key.slice(2).replace(/[^a-z0-9]/gi, "").toLowerCase()
+          : "";
+        const type = Object.keys(counts).find(
+          (candidate) =>
+            candidate.replace(/[^a-z0-9]/gi, "").toLowerCase() === statType
+        );
+
+        if (type && Number.isFinite(value)) {
+          counts[type] = value;
         }
       }
     }
@@ -101,7 +92,7 @@ export default function GraphSidebar({
 
   // Keep category ordering stable, even when categories are hidden.
   const types = useMemo(() => {
-    return [...SIDEBAR_NODE_TYPES].sort(
+    return [...new Set([...SIDEBAR_NODE_TYPES, ...Object.keys(typeCounts)])].sort(
       (a, b) =>
         typeCounts[b] - typeCounts[a] || a.localeCompare(b)
     );
